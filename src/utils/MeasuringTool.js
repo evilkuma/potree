@@ -169,7 +169,7 @@ export class MeasuringTool extends EventDispatcher{
 	startInsertion (args = {}) {
 		let domElement = this.viewer.renderer.domElement;
 
-		let measure = new Measure();
+		let measure = new Measure(this.viewer.scene.pointclouds);
 
 		this.dispatchEvent({
 			type: 'start_inserting_measurement',
@@ -195,6 +195,7 @@ export class MeasuringTool extends EventDispatcher{
 		measure.showEdges = pick(args.showEdges, true);
 		measure.closed = pick(args.closed, false);
 		measure.maxMarkers = pick(args.maxMarkers, Infinity);
+		measure.markArea = pick(args.markArea, false);
 
 		measure.name = args.name || 'Measurement';
 
@@ -416,5 +417,28 @@ export class MeasuringTool extends EventDispatcher{
 
 	render(){
 		this.viewer.renderer.render(this.scene, this.viewer.scene.getActiveCamera());
+	}
+
+	loadJSON(json) {
+
+		let measure = new Measure(this.viewer.scene.pointclouds);
+
+		measure.showDistances = json.showDistances;
+
+		measure.showArea = json.showArea;
+		measure.showAngles = json.showAngles;
+		measure.showCoordinates = json.showCoordinates;
+		measure.showHeight = json.showHeight;
+		measure.showCircle = json.showCircle;
+		measure.showAzimuth = json.showAzimuth;
+		measure.showEdges = json.showEdges;
+		measure.closed = json.closed;
+		measure.markArea = json.markArea;
+
+		json.points.forEach(p => measure.addMarker(new THREE.Vector3().fromArray(p)));
+
+		this.scene.add(measure);
+		this.viewer.scene.addMeasurement(measure);
+
 	}
 };

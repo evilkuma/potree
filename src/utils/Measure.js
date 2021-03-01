@@ -281,7 +281,7 @@ function createAzimuth(){
 }
 
 export class Measure extends THREE.Object3D {
-	constructor () {
+	constructor (pointclouds) {
 		super();
 
 		this.constructor.counter = (this.constructor.counter === undefined) ? 0 : this.constructor.counter + 1;
@@ -298,6 +298,10 @@ export class Measure extends THREE.Object3D {
 		this._showEdges = true;
 		this._showAzimuth = false;
 		this.maxMarkers = Number.MAX_SAFE_INTEGER;
+		this._markArea = false;
+		this.pointclouds = pointclouds;
+
+		this.box = null;
 
 		this.sphereGeometry = new THREE.SphereGeometry(0.4, 10, 10);
 		this.color = new THREE.Color(0xff0000);
@@ -437,8 +441,8 @@ export class Measure extends THREE.Object3D {
 						for (let key of Object.keys(I.point).filter(e => e !== 'position')) {
 							point[key] = I.point[key];
 						}
-
-						this.setPosition(i, I.location);
+						
+						this.setPosition(i, I.location, e.viewer.scene.pointclouds);
 					}
 				}
 			};
@@ -492,6 +496,7 @@ export class Measure extends THREE.Object3D {
 		this.spheres.splice(index, 1);
 
 		this.update();
+		this.updateBox();
 
 		this.dispatchEvent({type: 'marker_removed', measurement: this});
 	};
@@ -508,6 +513,7 @@ export class Measure extends THREE.Object3D {
 		this.dispatchEvent(event);
 
 		this.update();
+		this.updateBox();
 	}
 
 	setPosition (index, position) {
@@ -523,6 +529,7 @@ export class Measure extends THREE.Object3D {
 		this.dispatchEvent(event);
 
 		this.update();
+		this.updateBox();
 	};
 
 	getArea () {
@@ -834,6 +841,186 @@ export class Measure extends THREE.Object3D {
 		// this.updateAzimuth();
 	};
 
+	calcArea() {
+
+		if(!this._markArea || this.points.length < 3) return;
+
+		const pointInArea = (point, area, VX = 'x', VY = 'y') => {
+
+			let res = false;
+
+			let j = area.length - 1;
+			for(let i = 0; i < area.length; i++) {
+				let pi = area[i];
+				let pj = area[j];
+
+				if( (pi[VY] < point[VY] && pj[VY] >= point[VY] || pj[VY] < point[VY] && pi[VY] >= point[VY]) &&
+					(pi[VX] + (point[VY] - pi[VY]) / (pj[VY] - pi[VY]) * (pj[VX] - pi[VX]) < point[VX])
+				) {
+					res = !res;
+				}
+
+				j = i;
+			}
+
+			return res;
+
+		}
+
+		// TODO
+		const pointcloud = this.pointclouds[0];
+		const node_keys = ['r'];//Object.keys(pointcloud.pcoGeometry.nodes);
+
+		const matrix = pointcloud.matrix.clone().invert();
+
+		const border = this.points.map(p => p.position.clone().applyMatrix4(matrix));
+
+		let maxY, minY;
+
+		for(let node_key of node_keys) {
+
+			const positions = pointcloud.pcoGeometry.nodes[node_key].geometry.attributes.position;
+			const pos_exmpl = (new Float32Array(positions.itemSize)).fill(0);
+			const vector = new THREE.Vector3();
+
+			for(let i = 0; i < positions.count; i++) {
+
+				pos_exmpl.forEach((v, indx) => pos_exmpl[indx] = positions.array[i*positions.itemSize + indx])
+				vector.fromArray(pos_exmpl);
+
+				if(pointInArea(vector, border)) {
+
+					if(maxY === undefined || vector.z > maxY) maxY = vector.z;
+					if(minY === undefined || vector.z < minY) minY = vector.z;
+
+				}
+
+			}
+
+		}
+
+		const temp_vector = new THREE.Vector3();
+
+		temp_vector.z = minY;
+		temp_vector.applyMatrix4(pointcloud.matrix);
+		minY = temp_vector.z;
+		temp_vector.z = maxY;
+		temp_vector.applyMatrix4(pointcloud.matrix);
+		maxY = temp_vector.z;
+
+		return [minY, maxY];
+
+	}
+
+	updateBox() {
+
+		if(!this._markArea || this.points.length < 3) return;
+
+		if(!this.box) {
+			// build box
+
+			const geometry = new THREE.BufferGeometry();
+
+			this.box = new THREE.Mesh(
+				geometry,
+				new THREE.MeshBasicMaterial({color: 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0.2})
+			);
+			this.add(this.box);
+
+			this.box.add(new THREE.LineSegments(new THREE.BufferGeometry, new THREE.LineBasicMaterial({color: 'black'})));
+
+		}
+
+		if(!this.box.geometry.attributes.position || this.points.length*2 != this.box.geometry.attributes.position.count) {
+
+			const vertices = new Float32Array(this.points.length*3*2);
+			const indices = new Array(this.points.length*3*2);
+
+			this.box.geometry.setAttribute( 'position', new THREE.BufferAttribute( vertices, 3 ) );
+			this.box.geometry.setIndex( indices );
+			this.box.children[0].geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(this.points.length*3*6), 3));
+
+		}
+
+		const height = this.calcArea();
+
+		while(this.box.children.length > 1) {
+			this.box.remove(this.box.children[1]);
+		}
+
+		const borderVertAttr = this.box.children[0].geometry.getAttribute('position');
+
+		const vertAttr = this.box.geometry.getAttribute('position');
+		const indAttr = this.box.geometry.getIndex();
+
+		const vertices = vertAttr.array;
+		const indices = indAttr.array;
+
+		for(let i = 0; i < this.points.length; i++) {
+			vertices[i*6+0] = this.points[i].position.x;
+			vertices[i*6+1] = this.points[i].position.y;
+			vertices[i*6+2] = height[0];
+			vertices[i*6+3] = this.points[i].position.x;
+			vertices[i*6+4] = this.points[i].position.y;
+			vertices[i*6+5] = height[1];
+
+			let p1 = i*2;
+			let p2 = p1+1;
+			let p3 = (i + 1 >= this.points.length) ? 0 : p2+1;
+			let p4 = p3+1;
+
+			indices[i*6+0] = p1;
+			indices[i*6+1] = p2;
+			indices[i*6+2] = p3;
+			indices[i*6+3] = p3;
+			indices[i*6+4] = p4;
+			indices[i*6+5] = p2;
+
+			let j = i == this.points.length - 1 ? 0 : i+1;
+
+			borderVertAttr.array[i*18+0] = this.points[i].position.x;
+			borderVertAttr.array[i*18+1] = this.points[i].position.y;
+			borderVertAttr.array[i*18+2] = height[1];
+			borderVertAttr.array[i*18+3] = this.points[j].position.x;
+			borderVertAttr.array[i*18+4] = this.points[j].position.y;
+			borderVertAttr.array[i*18+5] = height[1];
+			borderVertAttr.array[i*18+6] = this.points[i].position.x;
+			borderVertAttr.array[i*18+7] = this.points[i].position.y;
+			borderVertAttr.array[i*18+8] = height[0];
+			borderVertAttr.array[i*18+9] = this.points[j].position.x;
+			borderVertAttr.array[i*18+10] = this.points[j].position.y;
+			borderVertAttr.array[i*18+11] = height[0];
+			borderVertAttr.array[i*18+12] = this.points[i].position.x;
+			borderVertAttr.array[i*18+13] = this.points[i].position.y;
+			borderVertAttr.array[i*18+14] = height[0];
+			borderVertAttr.array[i*18+15] = this.points[i].position.x;
+			borderVertAttr.array[i*18+16] = this.points[i].position.y;
+			borderVertAttr.array[i*18+17] = height[1];
+		}
+
+		vertAttr.needsUpdate = true;
+		indAttr.needsUpdate = true;
+		this.box.geometry.computeBoundingBox();
+		this.box.geometry.computeVertexNormals();
+		
+		borderVertAttr.needsUpdate = true;
+		
+		const shape = new THREE.Shape();
+		shape.moveTo(this.points[0].position.x, this.points[0].position.y);
+		for(let i = 1; i < this.points.length; i++) {
+			shape.lineTo(this.points[i].position.x, this.points[i].position.y);
+		}
+		shape.lineTo(this.points[0].position.x, this.points[0].position.y);
+
+		const shape_geometry = new THREE.ShapeGeometry( shape );
+		this.box.add(...height.map(h => {
+			const mesh = new THREE.Mesh( shape_geometry, this.box.material );
+			mesh.position.z = h;
+			return mesh;
+		}));
+
+	}
+
 	raycast (raycaster, intersects) {
 		for (let i = 0; i < this.points.length; i++) {
 			let sphere = this.spheres[i];
@@ -851,6 +1038,26 @@ export class Measure extends THREE.Object3D {
 		}
 		intersects.sort(function (a, b) { return a.distance - b.distance; });
 	};
+
+	toJSON() {
+		// TODO
+		const json = {
+			type: 'Measure',
+			points: this.points.map(e => e.position.toArray()),
+			showDistances: this._showDistances,
+			showCoordinates: this._showCoordinates,
+			showArea: this._showArea,
+			closed: this._closed,
+			showAngles: this._showAngles,
+			showCircle: this._showCircle,
+			showHeight: this._showHeight,
+			showEdges: this._showEdges,
+			showAzimuth: this._showAzimuth,
+			markArea: this._markArea
+		};
+
+		return json;
+	}
 
 	get showCoordinates () {
 		return this._showCoordinates;
@@ -930,6 +1137,15 @@ export class Measure extends THREE.Object3D {
 
 	set showDistances (value) {
 		this._showDistances = value;
+		this.update();
+	}
+
+	get markArea () {
+		return this._markArea;
+	}
+
+	set markArea(value) {
+		this._markArea = value;
 		this.update();
 	}
 

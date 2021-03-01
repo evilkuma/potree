@@ -39,6 +39,7 @@ export class PointCloudMaterial extends THREE.RawShaderMaterial {
 		this._useClipBox = false;
 		this.clipBoxes = [];
 		this.clipPolygons = [];
+		this.measurements = [];
 		this._weighted = false;
 		this._gradient = Gradients.SPECTRAL;
 		this.gradientTexture = PointCloudMaterial.generateGradientTexture(this._gradient);
@@ -316,6 +317,14 @@ export class PointCloudMaterial extends THREE.RawShaderMaterial {
 		if(doUpdate){
 			this.updateShaderSource();
 		}
+	}
+
+	setMeasurements(measurements) {
+		if(!measurements) {
+			return;
+		}
+
+		this.measurements = measurements;
 	}
 	
 	get gradient(){

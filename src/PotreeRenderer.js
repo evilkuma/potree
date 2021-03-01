@@ -809,7 +809,19 @@ export class Renderer {
 				}
 			}
 
+			{ // marked measurements (bind uniforms)
 
+				if(material.measurements && material.measurements.length > 0){
+
+					const lMeasureVLen = shader.uniformLocations["uMeasureVLen[0]"];
+					gl.uniform2fv(lMeasureVLen, params.measureInfo.measureVLen);
+					
+					const lMeasureVertices = shader.uniformLocations["uMeasureVertices[0]"];
+					gl.uniform3fv(lMeasureVertices, params.measureInfo.measureVertices);
+
+				}
+
+			}
 			//shader.setUniformMatrix4("modelMatrix", world);
 			//shader.setUniformMatrix4("modelViewMatrix", worldView);
 			shader.setUniform1f("uLevel", level);
@@ -1078,6 +1090,23 @@ export class Renderer {
 			}
 		}
 
+		{ // marked measurements (generate data)
+			let measureVLen = [];
+			let measureVertices = [];
+
+			if(material.measurements && material.measurements.length > 0) {
+				for(let i = 0; i < material.measurements.length; i++) {
+					let measure = material.measurements[i];
+					measureVLen.push(measureVertices.length/3, measure.points.length);
+					measureVertices.push(...measure.points.map(e => e.position.toArray()).flat());
+				}
+			}
+
+			params.measureInfo = {
+				measureVLen, measureVertices
+			};
+		}
+
 		{ // UPDATE SHADER AND TEXTURES
 			if (!this.shaders.has(material)) {
 				let [vs, fs] = [material.vertexShader, material.fragmentShader];
@@ -1096,6 +1125,8 @@ export class Renderer {
 				let numClipBoxes = (material.clipBoxes && material.clipBoxes.length) ? material.clipBoxes.length : 0;
 				let numClipSpheres = (params.clipSpheres && params.clipSpheres.length) ? params.clipSpheres.length : 0;
 				let numClipPolygons = (material.clipPolygons && material.clipPolygons.length) ? material.clipPolygons.length : 0;
+				let numMeasureLen = params.measureInfo.measureVLen.length/2;
+				let numMeasureVertices = params.measureInfo.measureVertices.length/3;
 
 				let defines = [
 					`#define num_shadowmaps ${shadowMaps.length}`,
@@ -1103,6 +1134,8 @@ export class Renderer {
 					`#define num_clipboxes ${numClipBoxes}`,
 					`#define num_clipspheres ${numClipSpheres}`,
 					`#define num_clippolygons ${numClipPolygons}`,
+					`#define num_measures ${numMeasureLen}`,
+					`#define num_measure_vertices ${numMeasureVertices}`,
 				];
 
 

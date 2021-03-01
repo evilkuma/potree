@@ -278,6 +278,26 @@ export class Sidebar{
 				this.viewer.scene.removeAllMeasurements();
 			}
 		));
+		
+		// AREA
+		elToolbar.append(this.createToolIcon(
+			Potree.resourcePath + '/icons/area.svg',
+			'[title]tt.area_measurement',
+			() => {
+				$('#menu_measurements').next().slideDown();
+				let measurement = this.measuringTool.startInsertion({
+					showDistances: true,
+					showArea: true,
+					closed: true,
+					markArea: true,
+					name: 'Area'});
+
+				let measurementsRoot = $("#jstree_scene").jstree().get_json("measurements");
+				let jsonNode = measurementsRoot.children.find(child => child.data.uuid === measurement.uuid);
+				$.jstree.reference(jsonNode.id).deselect_all();
+				$.jstree.reference(jsonNode.id).select_node(jsonNode.id);
+			}
+		));
 
 
 		{ // SHOW / HIDE Measurements

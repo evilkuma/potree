@@ -1361,6 +1361,9 @@ export class Viewer extends EventDispatcher{
 						if(json.type === "Potree"){
 							Potree.loadProject(viewer, json);
 						}
+						if(json.type === "Measure") {
+							this.measuringTool.loadJSON(json);
+						}
 					}catch(e){
 						console.error("failed to parse the dropped file as JSON");
 						console.error(e);
@@ -1857,6 +1860,13 @@ export class Viewer extends EventDispatcher{
 				pointcloud.material.setClipPolygons(clipPolygons, this.clippingTool.maxPolygonVertices);
 				pointcloud.material.clipTask = this.clipTask;
 				pointcloud.material.clipMethod = this.clipMethod;
+			}
+		}
+
+		{ // update measurements
+			let markedMeasurements = this.scene.measurements.filter(e => e.markArea);
+			for(let pointcloud of visiblePointClouds){
+				pointcloud.material.setMeasurements(markedMeasurements);
 			}
 		}
 

@@ -60,6 +60,10 @@ uniform int clipMethod;
 	uniform mat4 uClipPolygonWVP[num_clippolygons];
 #endif
 
+#if defined(num_measures) && num_measures > 0
+	uniform vec2 uMeasureVLen[num_measures];
+	uniform vec3 uMeasureVertices[num_measure_vertices];
+#endif
 
 uniform float size;
 uniform float minSize;
@@ -704,6 +708,35 @@ float getPointSize(){
 	return pointSize;
 }
 
+// num_measure_vertices num_measures
+#if defined(num_measures) && num_measures > 0
+bool pointInMeasure(vec3 point, int idx) {
+	vec2 measureVLen = uMeasureVLen[idx];
+	int start = int(measureVLen[0]);
+	int end = start + int(measureVLen[1]);
+
+	bool c = false;
+	int j = end - 1;
+
+	for(int i = 0; i < 999999; i++) {
+		if(start == end) break;
+
+		vec3 pi = uMeasureVertices[start];
+		vec3 pj = uMeasureVertices[j];
+
+		if( (pi.y < point.y && pj.y >= point.y || pj.y < point.y && pi.y >= point.y) &&
+			(pi.x + (point.y - pi.y) / (pj.y - pi.y) * (pj.x - pi.x) < point.x)	
+		) {
+			c = !c;
+		}
+
+		j = start;
+		start++;
+	}
+	return c;
+}
+#endif
+
 #if defined(num_clippolygons) && num_clippolygons > 0
 bool pointInClipPolygon(vec3 point, int polyIdx) {
 
@@ -814,6 +847,15 @@ void doClipping(){
 			insideCount = insideCount + (inside ? 1 : 0);
 			clipVolumesCount++;
 		}	
+	#endif
+
+	#if defined(num_measures) && num_measures > 0
+		for(int i = 0; i < num_measures; i++) {
+			bool inside = pointInMeasure((modelMatrix * vec4(position, 1.0 )).xyz, i);
+			if(inside) {
+				vColor.r += 0.5;
+			}
+		}
 	#endif
 
 	#if defined(num_clippolygons) && num_clippolygons > 0
