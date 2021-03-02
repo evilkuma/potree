@@ -841,7 +841,7 @@ export class Measure extends THREE.Object3D {
 		// this.updateAzimuth();
 	};
 
-	calcArea() {
+	calcArea(border) {
 
 		if(!this._markArea || this.points.length < 3) return;
 
@@ -869,11 +869,7 @@ export class Measure extends THREE.Object3D {
 
 		// TODO
 		const pointcloud = this.pointclouds[0];
-		const node_keys = ['r'];//Object.keys(pointcloud.pcoGeometry.nodes);
-
-		const matrix = pointcloud.matrix.clone().invert();
-
-		const border = this.points.map(p => p.position.clone().applyMatrix4(matrix));
+		const node_keys = Object.keys(pointcloud.pcoGeometry.nodes);
 
 		let maxY, minY;
 
@@ -891,7 +887,7 @@ export class Measure extends THREE.Object3D {
 				if(pointInArea(vector, border)) {
 
 					if(maxY === undefined || vector.z > maxY) maxY = vector.z;
-					if(minY === undefined || vector.z < minY) minY = vector.z;
+					if(node_key == 'r' && (minY === undefined || vector.z < minY)) minY = vector.z;
 
 				}
 
@@ -899,16 +895,7 @@ export class Measure extends THREE.Object3D {
 
 		}
 
-		const temp_vector = new THREE.Vector3();
-
-		temp_vector.z = minY;
-		temp_vector.applyMatrix4(pointcloud.matrix);
-		minY = temp_vector.z;
-		temp_vector.z = maxY;
-		temp_vector.applyMatrix4(pointcloud.matrix);
-		maxY = temp_vector.z;
-
-		return [minY, maxY];
+		return [Math.floor(minY*10)/10, Math.ceil(maxY*10)/10];
 
 	}
 
@@ -928,6 +915,7 @@ export class Measure extends THREE.Object3D {
 			this.add(this.box);
 
 			this.box.add(new THREE.LineSegments(new THREE.BufferGeometry, new THREE.LineBasicMaterial({color: 'black'})));
+			this.box.applyMatrix4(this.pointclouds[0].matrix);
 
 		}
 
@@ -942,7 +930,11 @@ export class Measure extends THREE.Object3D {
 
 		}
 
-		const height = this.calcArea();
+
+		const matrix = this.pointclouds[0].matrix.clone().invert();
+		const border = this.points.map(p => p.position.clone().applyMatrix4(matrix));
+
+		const height = this.calcArea(border);
 
 		while(this.box.children.length > 1) {
 			this.box.remove(this.box.children[1]);
@@ -956,17 +948,17 @@ export class Measure extends THREE.Object3D {
 		const vertices = vertAttr.array;
 		const indices = indAttr.array;
 
-		for(let i = 0; i < this.points.length; i++) {
-			vertices[i*6+0] = this.points[i].position.x;
-			vertices[i*6+1] = this.points[i].position.y;
+		for(let i = 0; i < border.length; i++) {
+			vertices[i*6+0] = border[i].x;
+			vertices[i*6+1] = border[i].y;
 			vertices[i*6+2] = height[0];
-			vertices[i*6+3] = this.points[i].position.x;
-			vertices[i*6+4] = this.points[i].position.y;
+			vertices[i*6+3] = border[i].x;
+			vertices[i*6+4] = border[i].y;
 			vertices[i*6+5] = height[1];
 
 			let p1 = i*2;
 			let p2 = p1+1;
-			let p3 = (i + 1 >= this.points.length) ? 0 : p2+1;
+			let p3 = (i + 1 >= border.length) ? 0 : p2+1;
 			let p4 = p3+1;
 
 			indices[i*6+0] = p1;
@@ -976,25 +968,25 @@ export class Measure extends THREE.Object3D {
 			indices[i*6+4] = p4;
 			indices[i*6+5] = p2;
 
-			let j = i == this.points.length - 1 ? 0 : i+1;
+			let j = i == border.length - 1 ? 0 : i+1;
 
-			borderVertAttr.array[i*18+0] = this.points[i].position.x;
-			borderVertAttr.array[i*18+1] = this.points[i].position.y;
+			borderVertAttr.array[i*18+0] = border[i].x;
+			borderVertAttr.array[i*18+1] = border[i].y;
 			borderVertAttr.array[i*18+2] = height[1];
-			borderVertAttr.array[i*18+3] = this.points[j].position.x;
-			borderVertAttr.array[i*18+4] = this.points[j].position.y;
+			borderVertAttr.array[i*18+3] = border[j].x;
+			borderVertAttr.array[i*18+4] = border[j].y;
 			borderVertAttr.array[i*18+5] = height[1];
-			borderVertAttr.array[i*18+6] = this.points[i].position.x;
-			borderVertAttr.array[i*18+7] = this.points[i].position.y;
+			borderVertAttr.array[i*18+6] = border[i].x;
+			borderVertAttr.array[i*18+7] = border[i].y;
 			borderVertAttr.array[i*18+8] = height[0];
-			borderVertAttr.array[i*18+9] = this.points[j].position.x;
-			borderVertAttr.array[i*18+10] = this.points[j].position.y;
+			borderVertAttr.array[i*18+9] = border[j].x;
+			borderVertAttr.array[i*18+10] = border[j].y;
 			borderVertAttr.array[i*18+11] = height[0];
-			borderVertAttr.array[i*18+12] = this.points[i].position.x;
-			borderVertAttr.array[i*18+13] = this.points[i].position.y;
+			borderVertAttr.array[i*18+12] = border[i].x;
+			borderVertAttr.array[i*18+13] = border[i].y;
 			borderVertAttr.array[i*18+14] = height[0];
-			borderVertAttr.array[i*18+15] = this.points[i].position.x;
-			borderVertAttr.array[i*18+16] = this.points[i].position.y;
+			borderVertAttr.array[i*18+15] = border[i].x;
+			borderVertAttr.array[i*18+16] = border[i].y;
 			borderVertAttr.array[i*18+17] = height[1];
 		}
 
@@ -1006,11 +998,11 @@ export class Measure extends THREE.Object3D {
 		borderVertAttr.needsUpdate = true;
 		
 		const shape = new THREE.Shape();
-		shape.moveTo(this.points[0].position.x, this.points[0].position.y);
-		for(let i = 1; i < this.points.length; i++) {
-			shape.lineTo(this.points[i].position.x, this.points[i].position.y);
+		shape.moveTo(border[0].x, border[0].y);
+		for(let i = 1; i < border.length; i++) {
+			shape.lineTo(border[i].x, border[i].y);
 		}
-		shape.lineTo(this.points[0].position.x, this.points[0].position.y);
+		shape.lineTo(border[0].x, border[0].y);
 
 		const shape_geometry = new THREE.ShapeGeometry( shape );
 		this.box.add(...height.map(h => {
