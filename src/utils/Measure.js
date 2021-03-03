@@ -895,7 +895,10 @@ export class Measure extends THREE.Object3D {
 
 		}
 
-		return [Math.floor(minY*10)/10, Math.ceil(maxY*10)/10];
+		minY -= pointcloud.material.size/2;
+		maxY += pointcloud.material.size/2;
+
+		return [minY, maxY];
 
 	}
 

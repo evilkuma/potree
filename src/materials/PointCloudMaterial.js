@@ -685,6 +685,8 @@ export class PointCloudMaterial extends THREE.RawShaderMaterial {
 				type: 'material_property_changed',
 				target: this
 			});
+
+			this.measurements.forEach(m => m.updateBox());
 		}
 	}
 
